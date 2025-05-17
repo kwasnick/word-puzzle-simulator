@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Letter Grid App</title>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: Arial, sans-serif;
+      }
+      #input-view {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        height: 100vh;
+      }
+      #letters-input {
+        font-size: 1rem;
+        padding: 0.5rem;
+        width: 80vw;
+        max-width: 400px;
+      }
+      #go-button {
+        margin-top: 0.5rem;
+        padding: 0.5rem 1rem;
+        font-size: 1rem;
+      }
+      #grid-view {
+        padding: 1rem;
+      }
+      #grid {
+        display: grid;
+        grid-template-columns: repeat(8, 1fr);
+        width: 90vw;
+        max-width: 600px;
+        margin: 0 auto;
+      }
+      .cell {
+        border: 1px solid #000;
+        aspect-ratio: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .tile {
+        width: 80%;
+        height: 80%;
+        background: orange;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 1.5rem;
+        user-select: none;
+        cursor: grab;
+      }
+      .tile:active {
+        cursor: grabbing;
+      }
+      .selected {
+        outline: 3px dashed #00f;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- first screen -->
+    <div id="input-view">
+      <input
+        id="letters-input"
+        type="text"
+        placeholder="Enter letters (e.g., ABCDEF)"
+      />
+      <button id="go-button">Go</button>
+    </div>
+
+    <!-- second screen -->
+    <div id="grid-view" style="display: none">
+      <div id="grid"></div>
+    </div>
+
+    <script>
+      (function () {
+        const inputView = document.getElementById("input-view");
+        const gridView = document.getElementById("grid-view");
+        const grid = document.getElementById("grid");
+        const lettersInput = document.getElementById("letters-input");
+        const goButton = document.getElementById("go-button");
+        let selectedTile = null;
+
+        function shuffle(array) {
+          for (let i = array.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [array[i], array[j]] = [array[j], array[i]];
+          }
+        }
+
+        function initGrid(lettersString) {
+          const letters = lettersString.toUpperCase().split("").slice(0, 32); // max 32 tiles
+          grid.innerHTML = "";
+
+          // create 32 empty cells
+          for (let i = 0; i < 32; i++) {
+            const cell = document.createElement("div");
+            cell.className = "cell";
+            cell.dataset.cellIndex = i;
+            cell.addEventListener("dragover", onDragOver);
+            cell.addEventListener("drop", onDrop);
+            cell.addEventListener("click", onCellClick);
+            grid.appendChild(cell);
+          }
+
+          // randomly pick positions for each letter
+          const positions = Array.from(Array(32).keys());
+          shuffle(positions);
+          const letterPositions = positions.slice(0, letters.length);
+
+          // place each letter tile
+          letters.forEach((ltr, i) => {
+            const idx = letterPositions[i];
+            const cell = grid.querySelector(`.cell[data-cell-index='${idx}']`);
+            const tile = createTile(ltr);
+            cell.appendChild(tile);
+          });
+        }
+
+        function createTile(letter) {
+          const tile = document.createElement("div");
+          tile.className = "tile";
+          tile.draggable = true;
+          tile.textContent = letter;
+          tile.addEventListener("dragstart", onDragStart);
+          tile.addEventListener("click", onTileClick);
+          return tile;
+        }
+
+        function swapCells(sourceCell, targetCell) {
+          if (sourceCell === targetCell) return;
+          const sourceTile = sourceCell.querySelector(".tile");
+          const targetTile = targetCell.querySelector(".tile");
+          if (sourceTile) sourceCell.removeChild(sourceTile);
+          if (targetTile) targetCell.removeChild(targetTile);
+          if (sourceTile) targetCell.appendChild(sourceTile);
+          if (targetTile) sourceCell.appendChild(targetTile);
+        }
+
+        // desktop drag-and-drop handlers
+        function onDragStart(evt) {
+          evt.dataTransfer.setData(
+            "text/plain",
+            evt.target.parentElement.dataset.cellIndex
+          );
+        }
+        function onDragOver(evt) {
+          evt.preventDefault();
+        }
+        function onDrop(evt) {
+          evt.preventDefault();
+          const srcIdx = evt.dataTransfer.getData("text/plain");
+          const srcCell = grid.querySelector(
+            `.cell[data-cell-index='${srcIdx}']`
+          );
+          const tgtCell = evt.currentTarget;
+          swapCells(srcCell, tgtCell);
+        }
+
+        // fallback tap-to-swap for mobile (and any device)
+        function onTileClick(evt) {
+          const tile = evt.currentTarget;
+          if (selectedTile === tile) {
+            // deselect if tapped again
+            tile.classList.remove("selected");
+            selectedTile = null;
+          } else {
+            if (selectedTile) {
+              selectedTile.classList.remove("selected");
+            }
+            selectedTile = tile;
+            tile.classList.add("selected");
+          }
+        }
+        function onCellClick(evt) {
+          if (!selectedTile) return;
+          const cell = evt.currentTarget;
+          const srcCell = selectedTile.parentElement;
+          if (cell !== srcCell) {
+            swapCells(srcCell, cell);
+            selectedTile.classList.remove("selected");
+            selectedTile = null;
+          }
+        }
+
+        // wire up the Go button / Enter key
+        goButton.addEventListener("click", (e) => {
+          e.preventDefault();
+          const txt = lettersInput.value.trim();
+          if (txt) showGrid(txt);
+        });
+        lettersInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            goButton.click();
+          }
+        });
+
+        function showGrid(letters) {
+          inputView.style.display = "none";
+          gridView.style.display = "block";
+          initGrid(letters);
+        }
+
+        // on load, check for ?letters=...
+        const params = new URLSearchParams(window.location.search);
+        if (params.has("letters") && params.get("letters").length) {
+          showGrid(params.get("letters"));
+        }
+      })();
+    </script>
+  </body>
+</html>
