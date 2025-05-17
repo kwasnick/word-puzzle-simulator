@@ -66,6 +66,19 @@
       .selected {
         outline: 3px dashed #00f;
       }
+      #timer-container {
+        text-align: center;
+        margin-top: 1rem;
+      }
+      #timer {
+        font-size: 1.2rem;
+        font-weight: bold;
+        margin-right: 1rem;
+      }
+      #reset-timer {
+        padding: 0.3rem 0.6rem;
+        font-size: 1rem;
+      }
     </style>
   </head>
   <body>
@@ -82,6 +95,10 @@
     <!-- second screen -->
     <div id="grid-view" style="display: none">
       <div id="grid"></div>
+      <div id="timer-container">
+        <span id="timer">00:00</span>
+        <button id="reset-timer">Reset Timer</button>
+      </div>
     </div>
 
     <script>
@@ -91,6 +108,14 @@
         const grid = document.getElementById("grid");
         const lettersInput = document.getElementById("letters-input");
         const goButton = document.getElementById("go-button");
+
+        // Timer variables
+        let timerDisplay = null;
+        let resetBtn = null;
+        let elapsed = 0;
+        let startTimestamp = 0;
+        let timerInterval = null;
+
         let selectedTile = null;
         let dragData = {};
 
@@ -102,10 +127,9 @@
         }
 
         function initGrid(lettersString) {
-          const letters = lettersString.toUpperCase().split("").slice(0, 32); // max 32 tiles
+          const letters = lettersString.toUpperCase().split("").slice(0, 32);
           grid.innerHTML = "";
 
-          // create 32 empty cells
           for (let i = 0; i < 32; i++) {
             const cell = document.createElement("div");
             cell.className = "cell";
@@ -116,12 +140,10 @@
             grid.appendChild(cell);
           }
 
-          // randomly pick positions for each letter
           const positions = Array.from(Array(32).keys());
           shuffle(positions);
           const letterPositions = positions.slice(0, letters.length);
 
-          // place each letter tile
           letters.forEach((ltr, i) => {
             const idx = letterPositions[i];
             const cell = grid.querySelector(`.cell[data-cell-index='${idx}']`);
@@ -151,7 +173,7 @@
           if (targetTile) sourceCell.appendChild(targetTile);
         }
 
-        // desktop drag-and-drop handlers
+        // Desktop drag-and-drop
         function onDragStart(evt) {
           evt.dataTransfer.setData(
             "text/plain",
@@ -171,7 +193,7 @@
           swapCells(srcCell, tgtCell);
         }
 
-        // touch / pointer drag-and-drop handlers
+        // Touch / pointer drag-and-drop
         function onPointerDown(evt) {
           evt.preventDefault();
           const tile = evt.currentTarget;
@@ -210,7 +232,7 @@
           dragData = {};
         }
 
-        // fallback tap-to-swap for any device
+        // Tap-to-swap fallback
         function onTileClick(evt) {
           const tile = evt.currentTarget;
           if (selectedTile === tile) {
@@ -233,7 +255,43 @@
           }
         }
 
-        // Go button / Enter key
+        // Timer functions
+        function updateTimerDisplay() {
+          const totalSeconds = Math.floor(elapsed / 1000);
+          const mins = String(Math.floor(totalSeconds / 60)).padStart(2, "0");
+          const secs = String(totalSeconds % 60).padStart(2, "0");
+          timerDisplay.textContent = `${mins}:${secs}`;
+        }
+        function startTimer() {
+          if (timerInterval) return;
+          startTimestamp = Date.now();
+          timerInterval = setInterval(() => {
+            const now = Date.now();
+            elapsed += now - startTimestamp;
+            startTimestamp = now;
+            updateTimerDisplay();
+          }, 1000);
+        }
+        function stopTimer() {
+          if (!timerInterval) return;
+          clearInterval(timerInterval);
+          timerInterval = null;
+        }
+        function resetTimer() {
+          stopTimer();
+          elapsed = 0;
+          updateTimerDisplay();
+          startTimestamp = Date.now();
+          if (document.hasFocus()) startTimer();
+        }
+        function onFocusTimer() {
+          if (gridView.style.display === "block") startTimer();
+        }
+        function onBlurTimer() {
+          stopTimer();
+        }
+
+        // Go button / Enter
         goButton.addEventListener("click", (e) => {
           e.preventDefault();
           const txt = lettersInput.value.trim();
@@ -250,6 +308,16 @@
           inputView.style.display = "none";
           gridView.style.display = "block";
           initGrid(letters);
+
+          // setup timer UI once
+          if (!timerDisplay) {
+            timerDisplay = document.getElementById("timer");
+            resetBtn = document.getElementById("reset-timer");
+            resetBtn.addEventListener("click", resetTimer);
+            window.addEventListener("focus", onFocusTimer);
+            window.addEventListener("blur", onBlurTimer);
+          }
+          resetTimer();
         }
 
         // on load, check URL param
