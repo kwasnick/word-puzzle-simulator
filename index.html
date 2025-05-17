@@ -292,15 +292,24 @@
         }
 
         // Go button / Enter
+        function handleGo() {
+          const txt = lettersInput.value.trim();
+          if (!txt) return;
+          // update URL param
+          const newUrl = `${
+            window.location.pathname
+          }?letters=${encodeURIComponent(txt)}`;
+          history.replaceState(null, "", newUrl);
+          showGrid(txt);
+        }
         goButton.addEventListener("click", (e) => {
           e.preventDefault();
-          const txt = lettersInput.value.trim();
-          if (txt) showGrid(txt);
+          handleGo();
         });
         lettersInput.addEventListener("keydown", (e) => {
           if (e.key === "Enter") {
             e.preventDefault();
-            goButton.click();
+            handleGo();
           }
         });
 
@@ -323,6 +332,7 @@
         // on load, check URL param
         const params = new URLSearchParams(window.location.search);
         if (params.has("letters") && params.get("letters").length) {
+          lettersInput.value = params.get("letters");
           showGrid(params.get("letters"));
         }
       })();
