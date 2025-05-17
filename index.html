@@ -56,7 +56,9 @@
         font-weight: bold;
         font-size: 1.5rem;
         user-select: none;
+        touch-action: none;
         cursor: grab;
+        position: relative;
       }
       .tile:active {
         cursor: grabbing;
@@ -90,6 +92,7 @@
         const lettersInput = document.getElementById("letters-input");
         const goButton = document.getElementById("go-button");
         let selectedTile = null;
+        let dragData = {};
 
         function shuffle(array) {
           for (let i = array.length - 1; i > 0; i--) {
@@ -133,6 +136,7 @@
           tile.draggable = true;
           tile.textContent = letter;
           tile.addEventListener("dragstart", onDragStart);
+          tile.addEventListener("pointerdown", onPointerDown);
           tile.addEventListener("click", onTileClick);
           return tile;
         }
@@ -167,17 +171,53 @@
           swapCells(srcCell, tgtCell);
         }
 
-        // fallback tap-to-swap for mobile (and any device)
+        // touch / pointer drag-and-drop handlers
+        function onPointerDown(evt) {
+          evt.preventDefault();
+          const tile = evt.currentTarget;
+          const srcCell = tile.parentElement;
+          dragData.tile = tile;
+          dragData.srcCell = srcCell;
+          dragData.clone = tile.cloneNode(true);
+          const clone = dragData.clone;
+          clone.style.position = "fixed";
+          clone.style.width = tile.offsetWidth + "px";
+          clone.style.height = tile.offsetHeight + "px";
+          clone.style.left = evt.clientX - tile.offsetWidth / 2 + "px";
+          clone.style.top = evt.clientY - tile.offsetHeight / 2 + "px";
+          clone.style.pointerEvents = "none";
+          clone.style.zIndex = "1000";
+          document.body.appendChild(clone);
+          window.addEventListener("pointermove", onPointerMove);
+          window.addEventListener("pointerup", onPointerUp);
+        }
+        function onPointerMove(evt) {
+          const clone = dragData.clone;
+          clone.style.left = evt.clientX - clone.offsetWidth / 2 + "px";
+          clone.style.top = evt.clientY - clone.offsetHeight / 2 + "px";
+        }
+        function onPointerUp(evt) {
+          window.removeEventListener("pointermove", onPointerMove);
+          window.removeEventListener("pointerup", onPointerUp);
+          const clone = dragData.clone;
+          document.body.removeChild(clone);
+          const x = evt.clientX,
+            y = evt.clientY;
+          let elem = document.elementFromPoint(x, y);
+          let tgtCell = elem.closest(".cell");
+          if (!tgtCell) tgtCell = dragData.srcCell;
+          swapCells(dragData.srcCell, tgtCell);
+          dragData = {};
+        }
+
+        // fallback tap-to-swap for any device
         function onTileClick(evt) {
           const tile = evt.currentTarget;
           if (selectedTile === tile) {
-            // deselect if tapped again
             tile.classList.remove("selected");
             selectedTile = null;
           } else {
-            if (selectedTile) {
-              selectedTile.classList.remove("selected");
-            }
+            if (selectedTile) selectedTile.classList.remove("selected");
             selectedTile = tile;
             tile.classList.add("selected");
           }
@@ -193,7 +233,7 @@
           }
         }
 
-        // wire up the Go button / Enter key
+        // Go button / Enter key
         goButton.addEventListener("click", (e) => {
           e.preventDefault();
           const txt = lettersInput.value.trim();
@@ -212,7 +252,7 @@
           initGrid(letters);
         }
 
-        // on load, check for ?letters=...
+        // on load, check URL param
         const params = new URLSearchParams(window.location.search);
         if (params.has("letters") && params.get("letters").length) {
           showGrid(params.get("letters"));
