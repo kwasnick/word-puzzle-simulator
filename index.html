@@ -17,11 +17,14 @@
         justify-content: center;
         height: 100vh;
       }
-      #letters-input {
+      #letters-input,
+      #rows-input,
+      #cols-input {
         font-size: 1rem;
         padding: 0.5rem;
         width: 80vw;
         max-width: 400px;
+        margin-bottom: 0.5rem;
       }
       #go-button {
         margin-top: 0.5rem;
@@ -33,7 +36,6 @@
       }
       #grid {
         display: grid;
-        grid-template-columns: repeat(8, 1fr);
         width: 90vw;
         max-width: 600px;
         margin: 0 auto;
@@ -79,6 +81,18 @@
         padding: 0.3rem 0.6rem;
         font-size: 1rem;
       }
+      /* Simple flex row for row/col inputs */
+      #row-col-container {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 0.5rem;
+      }
+      #row-col-container label {
+        font-size: 1rem;
+      }
+      #row-col-container input {
+        width: 4rem;
+      }
     </style>
   </head>
   <body>
@@ -89,6 +103,16 @@
         type="text"
         placeholder="Enter letters (e.g., ABCDEF)"
       />
+      <div id="row-col-container">
+        <div>
+          <label for="rows-input">Rows:</label>
+          <input id="rows-input" type="number" min="1" placeholder="4" />
+        </div>
+        <div>
+          <label for="cols-input">Cols:</label>
+          <input id="cols-input" type="number" min="1" placeholder="8" />
+        </div>
+      </div>
       <button id="go-button">Go</button>
     </div>
 
@@ -107,6 +131,8 @@
         const gridView = document.getElementById("grid-view");
         const grid = document.getElementById("grid");
         const lettersInput = document.getElementById("letters-input");
+        const rowsInput = document.getElementById("rows-input");
+        const colsInput = document.getElementById("cols-input");
         const goButton = document.getElementById("go-button");
 
         // Timer variables
@@ -119,6 +145,9 @@
         let selectedTile = null;
         let dragData = {};
 
+        const defaultRows = 4;
+        const defaultCols = 8;
+
         function shuffle(array) {
           for (let i = array.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -126,11 +155,17 @@
           }
         }
 
-        function initGrid(lettersString) {
-          const letters = lettersString.toUpperCase().split("").slice(0, 32);
+        function initGrid(lettersString, rows, cols) {
+          const totalCells = rows * cols;
+          const letters = lettersString
+            .toUpperCase()
+            .split("")
+            .slice(0, totalCells);
           grid.innerHTML = "";
+          grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
 
-          for (let i = 0; i < 32; i++) {
+          // Create all cells
+          for (let i = 0; i < totalCells; i++) {
             const cell = document.createElement("div");
             cell.className = "cell";
             cell.dataset.cellIndex = i;
@@ -140,7 +175,8 @@
             grid.appendChild(cell);
           }
 
-          const positions = Array.from(Array(32).keys());
+          // Randomly assign letters to a subset of cells
+          const positions = Array.from(Array(totalCells).keys());
           shuffle(positions);
           const letterPositions = positions.slice(0, letters.length);
 
@@ -291,16 +327,54 @@
           stopTimer();
         }
 
+        // Read URL parameters and populate inputs
+        function readParams() {
+          const params = new URLSearchParams(window.location.search);
+          const lettersParam = params.get("letters") || "";
+          const rowsParam = parseInt(params.get("rows"), 10);
+          const colsParam = parseInt(params.get("cols"), 10);
+
+          // Populate letters input
+          if (lettersParam) {
+            lettersInput.value = lettersParam;
+          }
+
+          // Populate rows and cols inputs (or set placeholders)
+          if (!isNaN(rowsParam) && rowsParam > 0) {
+            rowsInput.value = rowsParam;
+          } else {
+            rowsInput.value = defaultRows;
+          }
+          if (!isNaN(colsParam) && colsParam > 0) {
+            colsInput.value = colsParam;
+          } else {
+            colsInput.value = defaultCols;
+          }
+
+          return {
+            letters: lettersParam,
+            rows: !isNaN(rowsParam) && rowsParam > 0 ? rowsParam : defaultRows,
+            cols: !isNaN(colsParam) && colsParam > 0 ? colsParam : defaultCols,
+          };
+        }
+
         // Go button / Enter
         function handleGo() {
           const txt = lettersInput.value.trim();
           if (!txt) return;
-          // update URL param
+
+          let rows = parseInt(rowsInput.value, 10);
+          let cols = parseInt(colsInput.value, 10);
+          if (isNaN(rows) || rows < 1) rows = defaultRows;
+          if (isNaN(cols) || cols < 1) cols = defaultCols;
+
+          // Update URL params
           const newUrl = `${
             window.location.pathname
-          }?letters=${encodeURIComponent(txt)}`;
+          }?letters=${encodeURIComponent(txt)}&rows=${rows}&cols=${cols}`;
           history.replaceState(null, "", newUrl);
-          showGrid(txt);
+
+          showGrid(txt, rows, cols);
         }
         goButton.addEventListener("click", (e) => {
           e.preventDefault();
@@ -312,11 +386,23 @@
             handleGo();
           }
         });
+        rowsInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            handleGo();
+          }
+        });
+        colsInput.addEventListener("keydown", (e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            handleGo();
+          }
+        });
 
-        function showGrid(letters) {
+        function showGrid(letters, rows, cols) {
           inputView.style.display = "none";
           gridView.style.display = "block";
-          initGrid(letters);
+          initGrid(letters, rows, cols);
 
           // setup timer UI once
           if (!timerDisplay) {
@@ -329,11 +415,10 @@
           resetTimer();
         }
 
-        // on load, check URL param
-        const params = new URLSearchParams(window.location.search);
-        if (params.has("letters") && params.get("letters").length) {
-          lettersInput.value = params.get("letters");
-          showGrid(params.get("letters"));
+        // On load, check URL params
+        const { letters, rows, cols } = readParams();
+        if (letters) {
+          showGrid(letters, rows, cols);
         }
       })();
     </script>
